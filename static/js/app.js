@@ -364,6 +364,14 @@ async function publishSite() {
 
     if (!editor) return;
 
+    // 0. 強制 Google 帳戶登入檢查：必須登入才能發布網站
+    const currentUser = getLoggedInUser();
+    if (!currentUser || !currentUser.id) {
+        showToast('🔒 本系統需要使用 Google 帳戶登入後方可發布網站！', 'error');
+        triggerGoogleLogin();
+        return;
+    }
+
     // 1. 嚴格空值檢查：代碼是否為空或僅包含空白字元
     const rawContent = editor.value || '';
     const htmlContent = rawContent.trim();
@@ -871,6 +879,11 @@ let cachedSites = [];
  * 載入網站清單（支援 creator_id 專屬隔離）
  */
 async function loadSitesList() {
+    const user = getLoggedInUser();
+    if (!user || !user.id) {
+        return; // 未登入 Google 帳戶前不載入私人清單
+    }
+
     const grid = document.getElementById('sitesGrid');
     const countPill = document.getElementById('siteCountPill');
     const creatorId = getOrCreateCreatorId();
@@ -1173,8 +1186,32 @@ async function initGoogleAuth() {
             if (hiddenBox) {
                 google.accounts.id.renderButton(hiddenBox, { theme: 'outline', size: 'large' });
             }
+
+            // 若目前為未登入狀態，同步在登入門檻卡片中渲染官方登入按鈕
+            renderGoogleGateButton();
         } catch (err) {
             console.warn('Google 帳戶初始化警告:', err);
+        }
+    }
+}
+
+/**
+ * 在登入驗證門檻卡片中渲染 Google 官方安全按鈕
+ */
+function renderGoogleGateButton() {
+    const gateBox = document.getElementById('g_id_signin_gate');
+    if (gateBox && window.google?.accounts?.id && googleAuthClientId) {
+        try {
+            gateBox.innerHTML = '';
+            google.accounts.id.renderButton(gateBox, {
+                theme: 'filled_blue',
+                size: 'large',
+                text: 'signin_with',
+                shape: 'rectangular',
+                width: 280
+            });
+        } catch (e) {
+            console.warn('無法渲染官方 Google Gate 按鈕:', e);
         }
     }
 }
@@ -1205,14 +1242,14 @@ function handleGoogleCredentialResponse(response) {
     localStorage.setItem('webforge_user', JSON.stringify(googleUser));
     updateUserAuthUI();
     closeGoogleConfigModal();
-    showToast(`🎉 歡迎回來，${googleUser.name}！已切換至您的專屬空間`, 'success');
+    showToast(`🎉 歡迎回來，${googleUser.name}！已解鎖進入您的專屬空間`, 'success');
 
     // 重新載入屬於該 Google 帳號的網站清單
     loadSitesList();
 }
 
 /**
- * 更新頂部導航列使用者登入狀態 UI
+ * 更新全站登入狀態 UI（強制 Google 帳戶登入門檻）
  */
 function updateUserAuthUI() {
     const user = getLoggedInUser();
@@ -1225,8 +1262,16 @@ function updateUserAuthUI() {
     const manageTitle = document.getElementById('manageTitle');
     const manageSubtitle = document.getElementById('manageSubtitle');
 
+    const loginGate = document.getElementById('loginGate');
+    const mainAppContent = document.getElementById('mainAppContent');
+    const navTabs = document.getElementById('navTabs');
+
     if (user && user.id) {
-        // 已登入狀態
+        // 已登入狀態：隱藏登入門檻，解鎖顯示主工作區域與導航分頁
+        if (loginGate) loginGate.style.display = 'none';
+        if (mainAppContent) mainAppContent.style.display = 'block';
+        if (navTabs) navTabs.style.display = 'flex';
+
         if (guestBox) guestBox.style.display = 'none';
         if (userBox) userBox.style.display = 'inline-flex';
 
@@ -1238,12 +1283,15 @@ function updateUserAuthUI() {
         if (manageTitle) manageTitle.textContent = `「${user.name}」的專屬在線網站`;
         if (manageSubtitle) manageSubtitle.textContent = `已綁定 Google 帳號（${user.email || user.name}），無論手機或任何電腦登入皆能完整同步與管理！`;
     } else {
-        // 未登入訪客狀態
+        // 未登入狀態：強制顯示登入門檻卡片，鎖定主要工作區與分頁
+        if (loginGate) loginGate.style.display = 'flex';
+        if (mainAppContent) mainAppContent.style.display = 'none';
+        if (navTabs) navTabs.style.display = 'none';
+
         if (guestBox) guestBox.style.display = 'inline-flex';
         if (userBox) userBox.style.display = 'none';
 
-        if (manageTitle) manageTitle.textContent = '我的在線網站';
-        if (manageSubtitle) manageSubtitle.textContent = '此處僅列出由您目前瀏覽器或裝置所發布的網站，其他訪客無法查看或刪除您的專屬站點。';
+        renderGoogleGateButton();
     }
 }
 
@@ -1336,15 +1384,14 @@ function simulateGoogleLogin() {
 }
 
 /**
- * 登出 Google 帳戶（切換回本地訪客模式）
+ * 登出 Google 帳戶（重新鎖定並返回登入門檻）
  */
 function logoutGoogleUser() {
-    if (confirm('確定要登出目前帳號嗎？登出後將切換回本地訪客空間。')) {
+    if (confirm('確定要登出目前帳號嗎？登出後將返回 Google 帳號登入畫面。')) {
         localStorage.removeItem('webforge_user');
         closeUserMenu();
         updateUserAuthUI();
-        showToast('已登出帳號，切換回本地訪客空間', 'info');
-        loadSitesList();
+        showToast('已安全登出 Google 帳戶，請登入後繼續使用', 'info');
     }
 }
 

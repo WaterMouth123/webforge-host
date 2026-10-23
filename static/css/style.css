@@ -1430,3 +1430,175 @@ input[type="text"]:focus {
 .logout-link:hover {
     background: rgba(244, 63, 94, 0.15) !important;
 }
+
+/* ==========================================================================
+   登入驗證門檻 (Login Gate - 強制 Google 帳戶登入保護)
+   ========================================================================== */
+.login-gate-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: calc(100vh - 120px);
+    padding: 32px 16px;
+    box-sizing: border-box;
+    animation: fadeInGate 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.login-gate-card {
+    max-width: 520px;
+    width: 100%;
+    padding: 40px 32px;
+    text-align: center;
+    position: relative;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 30px rgba(99, 102, 241, 0.15);
+}
+
+.login-gate-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    border-radius: 999px;
+    color: var(--accent-indigo);
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+}
+
+.login-gate-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+.login-gate-title {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 12px;
+    letter-spacing: -0.02em;
+}
+
+.login-gate-subtitle {
+    font-size: 0.92rem;
+    color: var(--text-muted);
+    line-height: 1.65;
+    margin-bottom: 28px;
+}
+
+.login-gate-action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
+}
+
+.btn-google-gate {
+    background: #ffffff;
+    color: #1e293b;
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 13px 28px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), 0 0 20px rgba(255, 255, 255, 0.15);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    width: 100%;
+    max-width: 320px;
+}
+
+.btn-google-gate:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), 0 0 25px rgba(255, 255, 255, 0.25);
+    background: #f8fafc;
+}
+
+.btn-google-gate:active {
+    transform: translateY(0);
+}
+
+.g-signin-gate-wrap {
+    margin-top: 6px;
+    min-height: 40px;
+    display: flex;
+    justify-content: center;
+}
+
+.login-gate-features {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    text-align: left;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.feature-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+    color: #cbd5e1;
+}
+
+.feature-check {
+    color: var(--accent-emerald);
+    font-weight: bold;
+    font-size: 0.95rem;
+}
+
+.feature-item strong {
+    color: #fff;
+}
+
+.login-gate-footer {
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.config-link {
+    font-size: 0.82rem;
+    color: var(--accent-cyan);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.config-link:hover {
+    text-decoration: underline;
+    color: #fff;
+}
+
+@keyframes fadeInGate {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+

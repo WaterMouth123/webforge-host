@@ -259,8 +259,10 @@ def create_site():
     html_content = (data.get('html') or data.get('html_content') or '').strip()
     title = (data.get('title') or '').strip() or '未命名網站'
     description = (data.get('description') or '').strip()
-    custom_slug = (data.get('slug') or '').strip()
     creator_id = (data.get('creator_id') or '').strip()
+
+    if not creator_id:
+        return jsonify({'success': False, 'message': '本系統需要使用 Google 帳戶登入後方可發布網站！'}), 401
 
     if not html_content:
         return jsonify({'success': False, 'message': '請提供 HTML 代碼內容！'}), 400
