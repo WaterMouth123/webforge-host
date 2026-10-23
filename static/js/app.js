@@ -399,6 +399,7 @@ async function publishSite() {
     `;
 
     try {
+        const creatorId = getOrCreateCreatorId();
         const response = await fetch('/api/publish', {
             method: 'POST',
             headers: {
@@ -407,7 +408,8 @@ async function publishSite() {
             body: JSON.stringify({
                 html: htmlContent,
                 title: title,
-                slug: slug
+                slug: slug,
+                creator_id: creatorId
             })
         });
 
@@ -804,18 +806,66 @@ function handleFileUpload(event) {
     reader.readAsText(file);
 }
 
+/**
+ * 取得或初始化當前使用者的專屬身分碼 (Creator ID)
+ * 保存在瀏覽器 localStorage 中，確保不同電腦或手機的使用者各自擁有獨立工作區
+ */
+function getOrCreateCreatorId() {
+    const STORAGE_KEY = 'webforge_creator_id';
+    let creatorId = localStorage.getItem(STORAGE_KEY);
+    if (!creatorId) {
+        creatorId = 'usr_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+        localStorage.setItem(STORAGE_KEY, creatorId);
+    }
+    return creatorId;
+}
+
+// 站點檢視範圍：預設為 'mine'（只看自己發布的），可切換為 'all'（全站公開）
+let currentSiteScope = 'mine';
+
+/**
+ * 切換網站清單檢視範圍 (mine | all)
+ */
+function setSiteScope(scope) {
+    currentSiteScope = scope;
+    const btnMine = document.getElementById('scopeMineBtn');
+    const btnAll = document.getElementById('scopeAllBtn');
+    const titleEl = document.getElementById('manageTitle');
+    const subtitleEl = document.getElementById('manageSubtitle');
+
+    if (scope === 'mine') {
+        btnMine?.classList.add('active');
+        btnAll?.classList.remove('active');
+        if (titleEl) titleEl.textContent = '我的在線網站';
+        if (subtitleEl) subtitleEl.textContent = '此處僅列出由您目前瀏覽器或裝置所發布的網站，其他訪客無法查看或刪除您的專屬站點。';
+    } else {
+        btnMine?.classList.remove('active');
+        btnAll?.classList.add('active');
+        if (titleEl) titleEl.textContent = '全站公開網站清單';
+        if (subtitleEl) subtitleEl.textContent = '展示伺服器上所有已發布並分享的公開網站。';
+    }
+
+    loadSitesList();
+}
+
 // 站點清單快取（供即時搜尋過濾用）
 let cachedSites = [];
 
 /**
- * 載入已發布網站清單
+ * 載入網站清單（支援 creator_id 專屬隔離）
  */
 async function loadSitesList() {
     const grid = document.getElementById('sitesGrid');
     const countPill = document.getElementById('siteCountPill');
+    const creatorId = getOrCreateCreatorId();
 
     try {
-        const res = await fetch('/api/sites');
+        const queryParams = new URLSearchParams({
+            creator_id: creatorId,
+            scope: currentSiteScope
+        });
+
+        const res = await fetch(`/api/sites?${queryParams.toString()}`);
         const contentType = res.headers.get('content-type') || '';
         if (!contentType.includes('application/json')) {
             throw new Error('伺服器未回傳有效 JSON');
@@ -828,8 +878,8 @@ async function loadSitesList() {
 
         cachedSites = data.sites || [];
 
-        // 更新頂部站點數量徽章
-        if (countPill) {
+        // 頂部導航列徽章只反映「我的網站」數量（若當前在 mine 模式下）
+        if (currentSiteScope === 'mine' && countPill) {
             countPill.textContent = cachedSites.length;
         }
 
@@ -851,18 +901,23 @@ async function loadSitesList() {
 }
 
 /**
- * 渲染已發布網站卡片網格
+ * 渲染網站卡片網格（精確標記個人站點與刪除保護）
  */
 function renderSitesGrid(sites) {
     const grid = document.getElementById('sitesGrid');
     if (!grid) return;
 
+    const myCreatorId = getOrCreateCreatorId();
+
     if (!sites || sites.length === 0) {
+        const emptyMsg = currentSiteScope === 'mine' 
+            ? '您尚未在此瀏覽器發布過任何網站。'
+            : '目前全站尚未有公開發布的網站。';
         grid.innerHTML = `
             <div class="empty-state">
                 <div class="empty-icon">📂</div>
-                <h3>尚未發布任何網站</h3>
-                <p>快切換到「新建與發布」分頁，貼上您的第一段 HTML 代碼吧！</p>
+                <h3>${currentSiteScope === 'mine' ? '您的專屬清單目前為空' : '尚無公開網站'}</h3>
+                <p>${emptyMsg} 快切換到「新建與發布」分頁，貼上您的第一段 HTML 代碼吧！</p>
                 <button class="btn btn-primary" onclick="switchTab('create')">現在開始生成</button>
             </div>
         `;
@@ -872,25 +927,37 @@ function renderSitesGrid(sites) {
     grid.innerHTML = sites.map(site => {
         const siteUrl = `/site/${site.slug}`;
         const fullUrl = `${window.location.origin}${siteUrl}`;
+        const isMySite = !site.creator_id || site.creator_id === myCreatorId;
+
+        // 只有自己的網站才允許刪除按鈕，避免誤刪他人發布的內容
+        const deleteBtnHtml = isMySite 
+            ? `<button class="btn btn-secondary btn-icon-danger" onclick="deleteSite('${site.id}', '${escapeHtml(site.title)}')">刪除</button>`
+            : '';
+
+        const badgeHtml = isMySite
+            ? `<span class="site-card-badge" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: #6ee7b7;">👤 我的發布</span>`
+            : `<span class="site-card-badge">🌐 公開站點</span>`;
+
         return `
             <div class="site-card">
                 <div>
                     <div class="site-card-header">
                         <h4 class="site-card-title">${escapeHtml(site.title)}</h4>
-                        <span class="site-card-badge">👁️ ${site.view_count || 0} 次瀏覽</span>
+                        ${badgeHtml}
                     </div>
                     <div class="site-card-slug">
                         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
                         <span>/site/${site.slug}</span>
                     </div>
                     <div class="site-card-meta">
+                        <span>👁️ ${site.view_count || 0} 次瀏覽</span>
                         <span>發布於：${site.created_at || '剛才'}</span>
                     </div>
                 </div>
                 <div class="site-card-actions">
                     <a href="${siteUrl}" target="_blank" class="btn btn-primary" style="text-decoration:none;">開啟網站</a>
                     <button class="btn btn-secondary" onclick="openQrModal('${fullUrl}', '${escapeHtml(site.title)}')">QR碼</button>
-                    <button class="btn btn-secondary btn-icon-danger" onclick="deleteSite('${site.id}', '${escapeHtml(site.title)}')">刪除</button>
+                    ${deleteBtnHtml}
                 </div>
             </div>
         `;
@@ -918,15 +985,19 @@ function filterSitesList() {
 }
 
 /**
- * 刪除指定網站
+ * 刪除指定網站（安全附帶 creator_id 驗證）
  */
 async function deleteSite(siteId, siteTitle) {
     if (!confirm(`確定要刪除「${siteTitle}」嗎？刪除後該網址將無法再存取。`)) {
         return;
     }
 
+    const creatorId = getOrCreateCreatorId();
+
     try {
-        const res = await fetch(`/api/sites/${siteId}`, { method: 'DELETE' });
+        const res = await fetch(`/api/sites/${siteId}?creator_id=${encodeURIComponent(creatorId)}`, { 
+            method: 'DELETE' 
+        });
         const data = await res.json();
         if (data.success) {
             showToast('網站已成功刪除', 'info');
@@ -1042,6 +1113,7 @@ window.deleteSite = deleteSite;
 window.openQrModal = openQrModal;
 window.closeQrModal = closeQrModal;
 window.renderQrCode = renderQrCode;
+window.setSiteScope = setSiteScope;
 
 /* ==========================================================================
    五、 頁面生命週期初始化

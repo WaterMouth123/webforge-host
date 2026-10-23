@@ -1148,6 +1148,38 @@ input[type="text"]:focus {
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-wrap: wrap;
+}
+
+.scope-toggle-group {
+    display: inline-flex;
+    background: rgba(10, 15, 29, 0.7);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    padding: 3px;
+    gap: 4px;
+}
+
+.scope-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.scope-btn:hover {
+    color: #fff;
+}
+
+.scope-btn.active {
+    background: rgba(99, 102, 241, 0.25);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .manage-actions input {

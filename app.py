@@ -84,9 +84,18 @@ def init_db():
             view_count INTEGER DEFAULT 0,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
-            is_active INTEGER DEFAULT 1
+            is_active INTEGER DEFAULT 1,
+            creator_id TEXT DEFAULT ''
         )
     ''')
+    # 自動升級舊資料庫結構（若無 creator_id 欄位則動態加入）
+    cursor.execute('PRAGMA table_info(sites)')
+    cols = [col[1] for col in cursor.fetchall()]
+    if 'creator_id' not in cols:
+        try:
+            cursor.execute('ALTER TABLE sites ADD COLUMN creator_id TEXT DEFAULT ""')
+        except Exception:
+            pass
     conn.commit()
     conn.close()
 
@@ -199,14 +208,30 @@ def network_info():
 
 @app.route('/api/sites', methods=['GET'])
 def list_sites():
-    """取得所有已發布網站清單"""
+    """取得已發布網站清單（支援 creator_id 專屬隔離）"""
+    creator_id = (request.args.get('creator_id') or '').strip()
+    scope = (request.args.get('scope') or 'mine').strip()
+
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT id, slug, title, description, view_count, created_at, updated_at FROM sites WHERE is_active = 1 ORDER BY created_at DESC')
+
+    # 預設模式：若傳入 creator_id 且 scope 為 'mine'，只回傳屬於該瀏覽器使用者的專屬站點
+    if creator_id and scope == 'mine':
+        cursor.execute(
+            'SELECT id, slug, title, description, view_count, created_at, updated_at, creator_id '
+            'FROM sites WHERE is_active = 1 AND creator_id = ? '
+            'ORDER BY created_at DESC', (creator_id,)
+        )
+    else:
+        cursor.execute(
+            'SELECT id, slug, title, description, view_count, created_at, updated_at, creator_id '
+            'FROM sites WHERE is_active = 1 '
+            'ORDER BY created_at DESC'
+        )
     rows = cursor.fetchall()
     sites = [dict(row) for row in rows]
     conn.close()
-    return jsonify({'success': True, 'sites': sites})
+    return jsonify({'success': True, 'sites': sites, 'scope': scope})
 
 @app.route('/api/publish', methods=['POST'])
 @app.route('/api/save', methods=['POST'])
@@ -226,6 +251,7 @@ def create_site():
     title = (data.get('title') or '').strip() or '未命名網站'
     description = (data.get('description') or '').strip()
     custom_slug = (data.get('slug') or '').strip()
+    creator_id = (data.get('creator_id') or '').strip()
 
     if not html_content:
         return jsonify({'success': False, 'message': '請提供 HTML 代碼內容！'}), 400
@@ -282,11 +308,11 @@ def create_site():
         conn.close()
         return jsonify({'success': False, 'message': f'檔案儲存失敗：{str(e)}'}), 500
 
-    # 同步寫入 SQLite 資料庫進行管理與計數
+    # 同步寫入 SQLite 資料庫進行管理與計數（記錄發布者專屬 creator_id）
     cursor.execute('''
-        INSERT INTO sites (id, slug, title, html_content, description, view_count, created_at, updated_at, is_active)
-        VALUES (?, ?, ?, ?, ?, 0, ?, ?, 1)
-    ''', (site_id, slug, title, html_content, description, now, now))
+        INSERT INTO sites (id, slug, title, html_content, description, view_count, created_at, updated_at, is_active, creator_id)
+        VALUES (?, ?, ?, ?, ?, 0, ?, ?, 1, ?)
+    ''', (site_id, slug, title, html_content, description, now, now, creator_id))
     conn.commit()
     conn.close()
 
@@ -385,9 +411,22 @@ def update_site(site_id):
 
 @app.route('/api/sites/<site_id>', methods=['DELETE'])
 def delete_site(site_id):
-    """刪除網站（軟刪除）"""
+    """刪除網站（軟刪除，支援 creator_id 專屬驗證）"""
+    req_creator_id = (request.args.get('creator_id') or (request.get_json(silent=True) or {}).get('creator_id') or '').strip()
     conn = get_db()
     cursor = conn.cursor()
+    cursor.execute('SELECT creator_id FROM sites WHERE (id = ? OR slug = ?) AND is_active = 1', (site_id, site_id))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'success': False, 'message': '找不到該站點'}), 404
+
+    owner_creator_id = (row['creator_id'] or '').strip()
+    # 若該站點有綁定建立者，且呼叫者身分不符，禁止刪除
+    if owner_creator_id and req_creator_id and owner_creator_id != req_creator_id:
+        conn.close()
+        return jsonify({'success': False, 'message': '權限不足！您只能刪除由您自己發布的網站。'}), 403
+
     cursor.execute('UPDATE sites SET is_active = 0 WHERE id = ? OR slug = ?', (site_id, site_id))
     conn.commit()
     conn.close()

@@ -58,7 +58,7 @@
                         <rect x="14" y="14" width="7" height="7"></rect>
                         <rect x="3" y="14" width="7" height="7"></rect>
                     </svg>
-                    <span>已發布網站</span>
+                    <span>我的網站</span>
                     <span class="counter-pill" id="siteCountPill">0</span>
                 </button>
             </nav>
@@ -214,14 +214,19 @@
             </div>
         </section>
 
-        <!-- 視圖 2: 已發布網站管理清單 -->
+        <!-- 視圖 2: 我的網站管理清單 -->
         <section class="view-panel" id="viewManage">
             <div class="manage-header glass-panel">
                 <div class="manage-info">
-                    <h2>已發布的在線網站</h2>
-                    <p>所有已生成的網站皆具備永久短網址，無論本機或局域網都可以隨時訪問使用。</p>
+                    <h2 id="manageTitle">我的在線網站</h2>
+                    <p id="manageSubtitle">此處僅列出由您目前瀏覽器或裝置所發布的網站，其他訪客無法查看或刪除您的專屬站點。</p>
                 </div>
                 <div class="manage-actions">
+                    <!-- 專屬隔離切換：我的網站 / 全站公開 -->
+                    <div class="scope-toggle-group">
+                        <button class="scope-btn active" id="scopeMineBtn" onclick="setSiteScope('mine')">👤 我的網站</button>
+                        <button class="scope-btn" id="scopeAllBtn" onclick="setSiteScope('all')">🌐 全站公開</button>
+                    </div>
                     <input type="text" id="searchSitesInput" placeholder="搜尋網站名稱或網址別名..." oninput="filterSitesList()">
                     <button class="btn btn-secondary" onclick="loadSitesList()">
                         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2"
