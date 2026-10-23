@@ -1321,3 +1321,112 @@ input[type="text"]:focus {
     color: var(--text-muted);
     margin-bottom: 20px;
 }
+
+/* ==========================================================================
+   User Auth & Google Sign-In Styles
+   ========================================================================== */
+.user-auth-section {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.btn-google-login {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    padding: 7px 14px;
+    border-radius: var(--radius-full);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-google-login:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.google-icon {
+    flex-shrink: 0;
+}
+
+.user-avatar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-glass-glow);
+    padding: 4px 12px 4px 5px;
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.user-avatar-btn:hover {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: var(--primary);
+}
+
+.user-avatar-img {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1.5px solid var(--accent-cyan);
+    background: #1e293b;
+}
+
+.user-name-text {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #fff;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.user-dropdown {
+    top: calc(100% + 10px);
+    right: 0;
+    min-width: 220px;
+}
+
+.user-dropdown-header {
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.user-dropdown-header strong {
+    font-size: 0.88rem;
+    color: #fff;
+}
+
+.user-dropdown-header span {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    word-break: break-all;
+}
+
+.user-dropdown-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 4px 0;
+}
+
+.logout-link {
+    color: var(--accent-rose) !important;
+}
+
+.logout-link:hover {
+    background: rgba(244, 63, 94, 0.15) !important;
+}

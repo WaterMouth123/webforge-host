@@ -807,10 +807,26 @@ function handleFileUpload(event) {
 }
 
 /**
+ * 取得當前已登入的 Google 使用者資訊
+ */
+function getLoggedInUser() {
+    try {
+        const str = localStorage.getItem('webforge_user');
+        return str ? JSON.parse(str) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
  * 取得或初始化當前使用者的專屬身分碼 (Creator ID)
- * 保存在瀏覽器 localStorage 中，確保不同電腦或手機的使用者各自擁有獨立工作區
+ * 若已登入 Google 帳號，優先採用 Google 唯一 ID；否則使用本地專屬訪客碼
  */
 function getOrCreateCreatorId() {
+    const user = getLoggedInUser();
+    if (user && user.id) {
+        return user.id;
+    }
     const STORAGE_KEY = 'webforge_creator_id';
     let creatorId = localStorage.getItem(STORAGE_KEY);
     if (!creatorId) {
@@ -1096,6 +1112,272 @@ function escapeHtml(text) {
         .replace(/'/g, '&#39;');
 }
 
+/* ==========================================================================
+   五、 Google 帳戶登入與個人空間管理模組 (Google Identity Services)
+   ========================================================================== */
+
+let googleAuthClientId = '';
+
+/**
+ * 解析 Google 回傳的 JWT Credential Token
+ */
+function parseJwt(token) {
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+    } catch (e) {
+        console.warn('JWT 解析失敗:', e);
+        return null;
+    }
+}
+
+/**
+ * 初始化 Google Identity Services 官方登入庫
+ */
+async function initGoogleAuth() {
+    // 優先讀取伺服器端環境變數配置，其次讀取瀏覽器覆寫設定
+    try {
+        const res = await fetch('/api/auth/config');
+        const data = await res.json();
+        if (data.google_client_id) {
+            googleAuthClientId = data.google_client_id;
+        }
+    } catch (e) {
+        console.warn('無法取得後端 Google Client ID 配置');
+    }
+
+    const localOverride = localStorage.getItem('webforge_google_client_id');
+    if (localOverride) {
+        googleAuthClientId = localOverride;
+    }
+
+    // 更新介面身分狀態
+    updateUserAuthUI();
+
+    // 如果已有 Client ID 且 Google GSI 腳本就緒，完成授權初始化
+    if (googleAuthClientId && window.google?.accounts?.id) {
+        try {
+            google.accounts.id.initialize({
+                client_id: googleAuthClientId,
+                callback: handleGoogleCredentialResponse,
+                auto_select: false,
+                cancel_on_tap_outside: true
+            });
+
+            // 渲染隱藏按鈕備用
+            const hiddenBox = document.getElementById('g_id_signin_hidden');
+            if (hiddenBox) {
+                google.accounts.id.renderButton(hiddenBox, { theme: 'outline', size: 'large' });
+            }
+        } catch (err) {
+            console.warn('Google 帳戶初始化警告:', err);
+        }
+    }
+}
+
+/**
+ * Google 登入成功回調函式
+ */
+function handleGoogleCredentialResponse(response) {
+    if (!response || !response.credential) {
+        showToast('Google 登入未完成', 'error');
+        return;
+    }
+
+    const payload = parseJwt(response.credential);
+    if (!payload || !payload.sub) {
+        showToast('無效的 Google 身分憑證', 'error');
+        return;
+    }
+
+    const googleUser = {
+        id: 'google_' + payload.sub,
+        name: payload.name || payload.given_name || 'Google 使用者',
+        email: payload.email || '',
+        picture: payload.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(payload.name || 'G')}&background=6366f1&color=fff`,
+        type: 'google'
+    };
+
+    localStorage.setItem('webforge_user', JSON.stringify(googleUser));
+    updateUserAuthUI();
+    closeGoogleConfigModal();
+    showToast(`🎉 歡迎回來，${googleUser.name}！已切換至您的專屬空間`, 'success');
+
+    // 重新載入屬於該 Google 帳號的網站清單
+    loadSitesList();
+}
+
+/**
+ * 更新頂部導航列使用者登入狀態 UI
+ */
+function updateUserAuthUI() {
+    const user = getLoggedInUser();
+    const guestBox = document.getElementById('authGuestBox');
+    const userBox = document.getElementById('authUserBox');
+    const avatarImg = document.getElementById('userAvatarImg');
+    const nameText = document.getElementById('userNameText');
+    const ddName = document.getElementById('userDropdownName');
+    const ddEmail = document.getElementById('userDropdownEmail');
+    const manageTitle = document.getElementById('manageTitle');
+    const manageSubtitle = document.getElementById('manageSubtitle');
+
+    if (user && user.id) {
+        // 已登入狀態
+        if (guestBox) guestBox.style.display = 'none';
+        if (userBox) userBox.style.display = 'inline-flex';
+
+        if (avatarImg) avatarImg.src = user.picture || 'https://ui-avatars.com/api/?name=User&background=6366f1&color=fff';
+        if (nameText) nameText.textContent = user.name || '我的帳號';
+        if (ddName) ddName.textContent = user.name || 'Google 使用者';
+        if (ddEmail) ddEmail.textContent = user.email || '專屬帳號已連接';
+
+        if (manageTitle) manageTitle.textContent = `「${user.name}」的專屬在線網站`;
+        if (manageSubtitle) manageSubtitle.textContent = `已綁定 Google 帳號（${user.email || user.name}），無論手機或任何電腦登入皆能完整同步與管理！`;
+    } else {
+        // 未登入訪客狀態
+        if (guestBox) guestBox.style.display = 'inline-flex';
+        if (userBox) userBox.style.display = 'none';
+
+        if (manageTitle) manageTitle.textContent = '我的在線網站';
+        if (manageSubtitle) manageSubtitle.textContent = '此處僅列出由您目前瀏覽器或裝置所發布的網站，其他訪客無法查看或刪除您的專屬站點。';
+    }
+}
+
+/**
+ * 點擊「Google 登入」按鈕
+ */
+function triggerGoogleLogin() {
+    // 檢查是否有配置 Client ID
+    if (!googleAuthClientId) {
+        openGoogleConfigModal();
+        return;
+    }
+
+    if (window.google?.accounts?.id) {
+        try {
+            google.accounts.id.prompt((notification) => {
+                if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                    // 若 One Tap 浮窗受阻，嘗試點擊隱藏按鈕
+                    const hiddenBtn = document.querySelector('#g_id_signin_hidden div[role=button]');
+                    if (hiddenBtn) {
+                        hiddenBtn.click();
+                    } else {
+                        openGoogleConfigModal();
+                    }
+                }
+            });
+        } catch (e) {
+            openGoogleConfigModal();
+        }
+    } else {
+        openGoogleConfigModal();
+    }
+}
+
+/**
+ * 儲存使用者自訂的 Google Client ID
+ */
+function saveGoogleClientId() {
+    const input = document.getElementById('googleClientIdInput');
+    const val = (input?.value || '').trim();
+
+    if (!val) {
+        showToast('請輸入有效的 Google OAuth Client ID！', 'error');
+        return;
+    }
+
+    if (!val.includes('.apps.googleusercontent.com')) {
+        showToast('Client ID 格式通常應為 xxxx.apps.googleusercontent.com', 'error');
+    }
+
+    localStorage.setItem('webforge_google_client_id', val);
+    googleAuthClientId = val;
+
+    showToast('✅ Google Client ID 儲存成功，正在重新初始化...', 'success');
+    closeGoogleConfigModal();
+
+    // 重新載入授權
+    initGoogleAuth();
+    setTimeout(() => {
+        triggerGoogleLogin();
+    }, 500);
+}
+
+/**
+ * 快速切換自訂身分（讓使用者在尚未建立 Client ID 時也能立刻體驗獨立空間）
+ */
+function simulateGoogleLogin() {
+    const input = document.getElementById('customUserEmailInput');
+    const email = (input?.value || '').trim();
+
+    if (!email || !email.includes('@')) {
+        showToast('請輸入有效的電子郵件格式！', 'error');
+        return;
+    }
+
+    const name = email.split('@')[0];
+    const user = {
+        id: 'google_sim_' + btoa(email.toLowerCase()).replace(/=/g, ''),
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        email: email.toLowerCase(),
+        picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`,
+        type: 'google'
+    };
+
+    localStorage.setItem('webforge_user', JSON.stringify(user));
+    updateUserAuthUI();
+    closeGoogleConfigModal();
+    showToast(`🎉 已成功切換至帳號「${user.email}」專屬空間！`, 'success');
+    loadSitesList();
+}
+
+/**
+ * 登出 Google 帳戶（切換回本地訪客模式）
+ */
+function logoutGoogleUser() {
+    if (confirm('確定要登出目前帳號嗎？登出後將切換回本地訪客空間。')) {
+        localStorage.removeItem('webforge_user');
+        closeUserMenu();
+        updateUserAuthUI();
+        showToast('已登出帳號，切換回本地訪客空間', 'info');
+        loadSitesList();
+    }
+}
+
+/**
+ * 使用者下拉選單開關
+ */
+function toggleUserMenu(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('userDropdownMenu');
+    if (menu) {
+        menu.classList.toggle('show');
+    }
+}
+
+function closeUserMenu() {
+    const menu = document.getElementById('userDropdownMenu');
+    if (menu) menu.classList.remove('show');
+}
+
+function openGoogleConfigModal() {
+    const modal = document.getElementById('googleConfigModal');
+    const input = document.getElementById('googleClientIdInput');
+    if (input && googleAuthClientId) {
+        input.value = googleAuthClientId;
+    }
+    if (modal) modal.classList.add('show');
+}
+
+function closeGoogleConfigModal() {
+    const modal = document.getElementById('googleConfigModal');
+    if (modal) modal.classList.remove('show');
+}
+
 // 註冊至全域 window，確保 HTML inline onclick 呼叫相容
 window.clearEditor = clearEditor;
 window.refreshPreview = refreshPreview;
@@ -1114,9 +1396,17 @@ window.openQrModal = openQrModal;
 window.closeQrModal = closeQrModal;
 window.renderQrCode = renderQrCode;
 window.setSiteScope = setSiteScope;
+window.triggerGoogleLogin = triggerGoogleLogin;
+window.openGoogleConfigModal = openGoogleConfigModal;
+window.closeGoogleConfigModal = closeGoogleConfigModal;
+window.saveGoogleClientId = saveGoogleClientId;
+window.simulateGoogleLogin = simulateGoogleLogin;
+window.toggleUserMenu = toggleUserMenu;
+window.closeUserMenu = closeUserMenu;
+window.logoutGoogleUser = logoutGoogleUser;
 
 /* ==========================================================================
-   五、 頁面生命週期初始化
+   六、 頁面生命週期初始化
    ========================================================================== */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1126,34 +1416,45 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. 初始化 HTML 編輯器監聽與即時預覽
     initEditorEvents();
 
-    // 3. 預先抓取已發布網站數量
+    // 3. 初始化 Google 帳戶登入狀態與配置
+    initGoogleAuth();
+
+    // 4. 預先抓取已發布網站數量
     loadSitesList();
 
-    // 4. 綁定發布按鈕點擊事件
+    // 5. 綁定發布按鈕點擊事件
     const publishBtn = document.getElementById('publishBtn');
     if (publishBtn) {
         publishBtn.addEventListener('click', publishSite);
     }
 
-    // 5. 點擊頁面其他空白處時關閉示範範本下拉選單
+    // 6. 點擊頁面其他空白處時關閉選單（範本選單 & 使用者下拉選單）
     document.addEventListener('click', (e) => {
         const selector = document.querySelector('.template-selector');
-        const menu = document.getElementById('templateMenu');
-        if (menu && selector && !selector.contains(e.target)) {
-            menu.classList.remove('show');
+        const templateMenu = document.getElementById('templateMenu');
+        if (templateMenu && selector && !selector.contains(e.target)) {
+            templateMenu.classList.remove('show');
+        }
+
+        const userSection = document.getElementById('userAuthSection');
+        const userDropdown = document.getElementById('userDropdownMenu');
+        if (userDropdown && userSection && !userSection.contains(e.target)) {
+            userDropdown.classList.remove('show');
         }
     });
 
-    // 6. 點擊彈窗遮罩背景或按 ESC 鍵可關閉彈窗
+    // 7. 點擊彈窗遮罩背景或按 ESC 鍵可關閉彈窗
     const shareModal = document.getElementById('shareModal');
     const qrOnlyModal = document.getElementById('qrOnlyModal');
+    const googleModal = document.getElementById('googleConfigModal');
 
-    [shareModal, qrOnlyModal].forEach(modal => {
+    [shareModal, qrOnlyModal, googleModal].forEach(modal => {
         if (modal) {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
                     closeShareModal();
                     closeQrModal();
+                    closeGoogleConfigModal();
                 }
             });
         }
@@ -1163,6 +1464,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Escape') {
             closeShareModal();
             closeQrModal();
+            closeGoogleConfigModal();
         }
     });
 });

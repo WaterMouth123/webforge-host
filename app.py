@@ -206,6 +206,15 @@ def network_info():
         'local_url': f"http://localhost:{port}"
     })
 
+@app.route('/api/auth/config', methods=['GET'])
+def auth_config():
+    """回傳 Google 登入設定（支援環境變數 GOOGLE_CLIENT_ID）"""
+    client_id = os.environ.get('GOOGLE_CLIENT_ID', '').strip()
+    return jsonify({
+        'google_client_id': client_id,
+        'enabled': bool(client_id)
+    })
+
 @app.route('/api/sites', methods=['GET'])
 def list_sites():
     """取得已發布網站清單（支援 creator_id 專屬隔離）"""

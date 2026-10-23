@@ -13,6 +13,8 @@
         href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Google Identity Services (GIS) 官方帳戶登入 SDK -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body>
@@ -62,6 +64,47 @@
                     <span class="counter-pill" id="siteCountPill">0</span>
                 </button>
             </nav>
+
+            <!-- 使用者帳號區（支援 Google 帳戶一鍵登入與個人空間隔離） -->
+            <div class="user-auth-section" id="userAuthSection">
+                <!-- 未登入狀態：Google 登入按鈕 -->
+                <div class="auth-guest-box" id="authGuestBox">
+                    <button class="btn btn-google-login" id="googleLoginBtn" onclick="triggerGoogleLogin()">
+                        <svg class="google-icon" viewBox="0 0 24 24" width="16" height="16">
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                        </svg>
+                        <span>Google 登入</span>
+                    </button>
+                    <!-- Google 官方登入隱形容器（供 GIS 自動渲染） -->
+                    <div id="g_id_signin_hidden" style="display:none;"></div>
+                </div>
+
+                <!-- 已登入狀態：使用者頭像與名稱 -->
+                <div class="auth-user-box" id="authUserBox" style="display:none;">
+                    <div class="user-avatar-btn" id="userAvatarBtn" onclick="toggleUserMenu(event)">
+                        <img id="userAvatarImg" src="" alt="Google Avatar" class="user-avatar-img">
+                        <span class="user-name-text" id="userNameText">Google 用戶</span>
+                        <span class="arrow-down">▾</span>
+                    </div>
+                    <!-- 使用者下拉選單 -->
+                    <div class="dropdown-menu user-dropdown" id="userDropdownMenu">
+                        <div class="user-dropdown-header">
+                            <strong id="userDropdownName">Google User</strong>
+                            <span id="userDropdownEmail">user@gmail.com</span>
+                        </div>
+                        <div class="user-dropdown-divider"></div>
+                        <a href="javascript:void(0)" onclick="switchTab('manage'); closeUserMenu();">
+                            📂 我的專屬發布空間
+                        </a>
+                        <a href="javascript:void(0)" onclick="logoutGoogleUser()" class="logout-link">
+                            🚪 登出帳戶
+                        </a>
+                    </div>
+                </div>
+            </div>
         </div>
     </header>
 
@@ -333,6 +376,56 @@
                     <input type="text" id="qrModalUrl" readonly>
                     <button class="btn btn-primary btn-sm" onclick="copyModalUrl('qrModalUrl')">複製</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Google 登入設定與啟用引導 Modal -->
+    <div class="modal-overlay" id="googleConfigModal">
+        <div class="modal-card glass-panel" style="max-width: 540px;">
+            <button class="modal-close" onclick="closeGoogleConfigModal()">✕</button>
+            <div class="modal-header">
+                <div class="brand-icon" style="margin: 0 auto 12px; width: 48px; height: 48px;">
+                    <svg viewBox="0 0 24 24" width="24" height="24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                    </svg>
+                </div>
+                <h3>設定 Google 帳戶一鍵登入</h3>
+                <p>連接 Google 官方登入，讓每位使用者都能以 Google 帳號劃分專屬獨立空間！</p>
+            </div>
+            <div class="modal-body">
+                <div class="config-guide-box" style="background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-glass); border-radius: var(--radius-sm); padding: 14px; font-size: 0.85rem; color: #cbd5e1; line-height: 1.6;">
+                    <p style="margin-bottom: 8px;"><strong style="color:#fff;">💡 快速啟用步驟（完全免費）：</strong></p>
+                    <ol style="margin-left: 18px; margin-bottom: 0;">
+                        <li>前往 <strong>Google Cloud Console</strong> 的「憑證」頁面。</li>
+                        <li>建立「OAuth 2.0 用戶端 ID」，將授權的 JavaScript 來源填入：<br><code style="color:var(--accent-cyan);">https://webforge-host.onrender.com</code> 或 <code style="color:var(--accent-cyan);">http://localhost:5000</code></li>
+                        <li>取得 Client ID（格式為 <code>xxxx.apps.googleusercontent.com</code>），填入下方或 Render 環境變數 <code>GOOGLE_CLIENT_ID</code> 即可！</li>
+                    </ol>
+                </div>
+
+                <div class="form-row mt-3">
+                    <label style="font-size: 0.85rem; color: #cbd5e1; display: block; margin-bottom: 6px;">
+                        貼上您的 Google OAuth Client ID：
+                    </label>
+                    <input type="text" id="googleClientIdInput" placeholder="例如：123456789-abcdef.apps.googleusercontent.com" style="width: 100%; box-sizing: border-box; background: #090d16; border: 1px solid #334155; padding: 10px 14px; border-radius: 8px; color: #fff; font-size: 0.88rem;">
+                </div>
+
+                <div class="form-row mt-3" style="border-top: 1px dashed var(--border-glass); padding-top: 14px;">
+                    <label style="font-size: 0.85rem; color: #cbd5e1; display: block; margin-bottom: 6px;">
+                        或者：直接以自訂 Google 暱稱快速切換體驗獨立空間
+                    </label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="customUserEmailInput" placeholder="例如：myname@gmail.com" style="flex: 1; background: #090d16; border: 1px solid #334155; padding: 9px 12px; border-radius: 8px; color: #fff; font-size: 0.88rem;">
+                        <button class="btn btn-secondary" onclick="simulateGoogleLogin()">快速切換</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="saveGoogleClientId()">儲存並啟用 Google 登入</button>
+                <button class="btn btn-secondary" onclick="closeGoogleConfigModal()">關閉</button>
             </div>
         </div>
     </div>
