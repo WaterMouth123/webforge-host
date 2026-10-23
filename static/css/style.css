@@ -145,22 +145,9 @@ body {
     color: var(--text-muted);
 }
 
-/* Network Status Badge */
+/* Network Status Badge (已依需求隱藏) */
 .network-badge {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 7px 14px;
-    background: rgba(16, 185, 129, 0.08);
-    border: 1px solid rgba(16, 185, 129, 0.25);
-    border-radius: var(--radius-full);
-    font-size: 0.82rem;
-    color: #6ee7b7;
-}
-
-.network-badge strong {
-    color: #fff;
-    font-family: var(--font-mono);
+    display: none !important;
 }
 
 .status-dot {
