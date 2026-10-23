@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebForge - HTML 即刻發布與線上託管系統</title>
+    <meta name="description" content="讀取 HTML 代碼並自動生成人人皆可存取的獨立網站，支援局域網即時分享與二維碼掃描。">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+    <!-- 頂部導航列 -->
+    <header class="app-header">
+        <div class="header-container">
+            <div class="brand">
+                <div class="brand-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                        <polyline points="2 17 12 22 22 17"></polyline>
+                        <polyline points="2 12 12 17 22 12"></polyline>
+                    </svg>
+                </div>
+                <div class="brand-info">
+                    <div class="brand-title-wrap">
+                        <h1 class="brand-title">WebForge</h1>
+                        <span class="version-tag">Instant Host</span>
+                    </div>
+                    <p class="brand-subtitle">HTML 代碼一鍵轉為在線網站，隨時分享給所有人使用</p>
+                </div>
+            </div>
+
+            <!-- 網絡狀態提示標籤 -->
+            <div class="network-badge" id="networkBadge" title="同一 Wi-Fi 或局域網內的朋友或手機皆可訪問">
+                <span class="status-dot pulsing"></span>
+                <span class="network-text">局域網連線：<strong id="lanIpDisplay">偵測中...</strong></span>
+            </div>
+
+            <!-- 頁面切換 Tabs -->
+            <nav class="nav-tabs">
+                <button class="nav-tab active" id="tabCreateBtn" onclick="switchTab('create')">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                        <path d="M12 5v14M5 12h14" />
+                    </svg>
+                    <span>新建與發布</span>
+                </button>
+                <button class="nav-tab" id="tabManageBtn" onclick="switchTab('manage')">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                    <span>已發布網站</span>
+                    <span class="counter-pill" id="siteCountPill">0</span>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- 主要工作區域 -->
+    <main class="main-content">
+        <!-- 視圖 1: 編輯與發布器 -->
+        <section class="view-panel active" id="viewCreate">
+            <!-- 工具控制條 -->
+            <div class="meta-toolbar glass-panel">
+                <div class="meta-inputs">
+                    <div class="input-group">
+                        <label for="siteTitleInput">網站名稱</label>
+                        <input type="text" id="siteTitleInput" placeholder="例如：2026 專案進度看板 / 產品介紹頁" value="我的新網站">
+                    </div>
+                    <div class="input-group slug-group">
+                        <label for="siteSlugInput">自訂短網址（留空則自動生成）</label>
+                        <div class="slug-input-wrapper">
+                            <span class="slug-prefix">/s/</span>
+                            <input type="text" id="siteSlugInput" placeholder="my-awesome-site"
+                                pattern="[a-zA-Z0-9-_]+">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="quick-actions">
+                    <!-- 載入範本下拉選單 -->
+                    <div class="template-selector">
+                        <button class="btn btn-secondary" id="templateMenuBtn" onclick="toggleTemplateMenu(event)">
+                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2"
+                                fill="none">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                            <span>載入示範代碼</span>
+                            <span class="arrow-down">▾</span>
+                        </button>
+                        <div class="dropdown-menu" id="templateMenu">
+                            <a href="javascript:void(0)" onclick="loadTemplate('construction')">🏗️ 工程進度與驗收看板 (實用展示)</a>
+                            <a href="javascript:void(0)" onclick="loadTemplate('landing')">✨ 現代科技產品首頁 (極簡高質感)</a>
+                            <a href="javascript:void(0)" onclick="loadTemplate('calculator')">🧮 裝修工程坪數與報價小工具</a>
+                            <a href="javascript:void(0)" onclick="loadTemplate('portfolio')">🎨 現代設計師作品集網頁</a>
+                        </div>
+                    </div>
+
+                    <!-- 上傳本機 HTML 檔案 -->
+                    <label class="btn btn-secondary upload-label" title="選取電腦中的 .html 檔案載入">
+                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2"
+                            fill="none">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <span>讀取本機 HTML</span>
+                        <input type="file" id="fileUploadInput" accept=".html,.htm" style="display: none;"
+                            onchange="handleFileUpload(event)">
+                    </label>
+
+                    <!-- 發布按鈕 -->
+                    <button class="btn btn-primary" id="publishBtn" onclick="publishSite()">
+                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2"
+                            fill="none">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                        <span>立即生成並發布網站</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 雙欄分屏編輯與即時預覽 -->
+            <div class="workspace-grid">
+                <!-- 左側：HTML 代碼輸入 -->
+                <div class="pane editor-pane glass-panel" id="editorDropZone">
+                    <div class="pane-header">
+                        <div class="pane-title">
+                            <span class="pane-icon">
+                                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2"
+                                    fill="none">
+                                    <polyline points="16 18 22 12 16 6"></polyline>
+                                    <polyline points="8 6 2 12 8 18"></polyline>
+                                </svg>
+                            </span>
+                            <span>HTML 代碼編輯器</span>
+                            <span class="file-drag-hint">（支援直接將 .html 拖曳至此）</span>
+                        </div>
+                        <div class="pane-meta">
+                            <span class="code-stats" id="codeStats">0 行 | 0 字元</span>
+                            <button class="icon-btn" onclick="clearEditor()" title="清空編輯器">
+                                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2"
+                                    fill="none">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path
+                                        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                    </path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="editor-body">
+                        <textarea id="htmlEditor"
+                            placeholder="在此處貼上或輸入您的 HTML / CSS / JavaScript 代碼...&#10;&#10;例如：&#10;<!DOCTYPE html>&#10;<html>&#10;  <head><title>Hello</title></head>&#10;  <body><h1>歡迎光臨我的網站！</h1></body>&#10;</html>"
+                            spellcheck="false"></textarea>
+                    </div>
+                </div>
+
+                <!-- 右側：即時效果預覽 -->
+                <div class="pane preview-pane glass-panel">
+                    <div class="pane-header">
+                        <div class="pane-title">
+                            <span class="pane-icon">
+                                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2"
+                                    fill="none">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                                    <path
+                                        d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
+                                    </path>
+                                </svg>
+                            </span>
+                            <span>即時效果預覽</span>
+                            <span class="live-dot" title="即打即看">LIVE</span>
+                        </div>
+                        <!-- 預覽尺寸切換 -->
+                        <div class="viewport-controls">
+                            <button class="viewport-btn active" id="vpDesktop" onclick="setViewport('100%')"
+                                title="桌面全寬">🖥️ 全寬</button>
+                            <button class="viewport-btn" id="vpTablet" onclick="setViewport('768px')"
+                                title="平板視圖 (768px)">📱 平板</button>
+                            <button class="viewport-btn" id="vpMobile" onclick="setViewport('375px')"
+                                title="手機視圖 (375px)">📱 手機</button>
+                            <button class="icon-btn" onclick="refreshPreview()" title="強制刷新預覽">
+                                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2"
+                                    fill="none">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15">
+                                    </path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="preview-viewport-wrap">
+                        <div class="preview-container" id="previewContainer">
+                            <iframe id="previewFrame" sandbox="allow-scripts allow-forms"></iframe>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 視圖 2: 已發布網站管理清單 -->
+        <section class="view-panel" id="viewManage">
+            <div class="manage-header glass-panel">
+                <div class="manage-info">
+                    <h2>已發布的在線網站</h2>
+                    <p>所有已生成的網站皆具備永久短網址，無論本機或局域網都可以隨時訪問使用。</p>
+                </div>
+                <div class="manage-actions">
+                    <input type="text" id="searchSitesInput" placeholder="搜尋網站名稱或網址別名..." oninput="filterSitesList()">
+                    <button class="btn btn-secondary" onclick="loadSitesList()">
+                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2"
+                            fill="none">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                        <span>重新整理</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 站點卡片容器 -->
+            <div class="sites-grid" id="sitesGrid">
+                <!-- 動態載入已發布站點 -->
+                <div class="empty-state">
+                    <div class="empty-icon">📂</div>
+                    <h3>尚未發布任何網站</h3>
+                    <p>快切換到「新建與發布」分頁，貼上您的第一段 HTML 代碼吧！</p>
+                    <button class="btn btn-primary" onclick="switchTab('create')">現在開始生成</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 發布成功彈窗 (Share Modal) -->
+    <div class="modal-overlay" id="shareModal">
+        <div class="modal-card glass-panel">
+            <button class="modal-close" onclick="closeShareModal()">✕</button>
+            <div class="modal-header">
+                <div class="success-icon-wrap">
+                    <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2.5"
+                        fill="none">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </div>
+                <h3 id="modalSiteTitle">網站發布成功！</h3>
+                <p>您的網站已經上線，現在大家都可以直接打開並使用它囉：</p>
+            </div>
+
+            <div class="modal-body">
+                <!-- 局域網分享推薦 (最適合同事與手機) -->
+                <div class="url-share-box highlight-box">
+                    <div class="url-label">
+                        <span class="badge badge-lan">推薦 · 所有人可用</span>
+                        <span>局域網網址（同 Wi-Fi / 辦公室手機與電腦直接開）：</span>
+                    </div>
+                    <div class="url-input-row">
+                        <input type="text" id="modalLanUrl" readonly>
+                        <button class="btn btn-primary btn-sm" onclick="copyModalUrl('modalLanUrl')">複製網址</button>
+                    </div>
+                </div>
+
+                <!-- 本機網址 -->
+                <div class="url-share-box">
+                    <div class="url-label">
+                        <span class="badge badge-local">本機訪問</span>
+                        <span>本機電腦專屬網址：</span>
+                    </div>
+                    <div class="url-input-row">
+                        <input type="text" id="modalLocalUrl" readonly>
+                        <button class="btn btn-secondary btn-sm" onclick="copyModalUrl('modalLocalUrl')">複製</button>
+                    </div>
+                </div>
+
+                <!-- QR Code 區塊 (手機一掃即開) -->
+                <div class="qr-section">
+                    <div class="qr-canvas-wrap" id="qrContainer">
+                        <!-- 動態生成 QR Code SVG -->
+                    </div>
+                    <div class="qr-instructions">
+                        <h4>📱 手機掃碼直接開</h4>
+                        <p>手機連上同一個 Wi-Fi，用相機掃描左側二維碼即可立即在手機上瀏覽與操作該網站！</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <a href="#" target="_blank" id="modalOpenBtn" class="btn btn-primary">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                        <polyline points="15 3 21 3 21 9"></polyline>
+                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                    </svg>
+                    <span>在新分頁立即開啟網站</span>
+                </a>
+                <button class="btn btn-secondary" onclick="closeShareModal()">完成關閉</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR Code 單獨查看 Modal -->
+    <div class="modal-overlay" id="qrOnlyModal">
+        <div class="modal-card modal-sm glass-panel">
+            <button class="modal-close" onclick="closeQrModal()">✕</button>
+            <div class="modal-header">
+                <h3 id="qrModalTitle">手機掃描二維碼</h3>
+                <p id="qrModalDesc">同網域直接開啟網站</p>
+            </div>
+            <div class="modal-body text-center">
+                <div class="qr-canvas-wrap center-qr" id="qrOnlyContainer"></div>
+                <div class="url-input-row mt-3">
+                    <input type="text" id="qrModalUrl" readonly>
+                    <button class="btn btn-primary btn-sm" onclick="copyModalUrl('qrModalUrl')">複製</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 訊息提示元件 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- 純前端極簡 QR Code 生成庫 (無任何外部依賴，純 SVG 向量繪製) -->
+    <script src="/static/js/qrcode-generator.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>

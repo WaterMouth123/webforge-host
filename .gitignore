@@ -1,0 +1,25 @@
+# Python 虛擬環境
+.venv/
+env/
+venv/
+ENV/
+
+# Python 快取字節碼
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 本機 SQLite 資料庫（由雲端啟動時自動初始化）
+database.db
+*.db-journal
+
+# 本機生成的測試站點（保留資料夾結構）
+published_sites/*.html
+!published_sites/.gitkeep
+
+# 系統與編輯器設定
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
