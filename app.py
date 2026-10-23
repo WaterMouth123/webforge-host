@@ -46,6 +46,26 @@ def request_entity_too_large(error):
         'message': '檔案過大！內容超出系統 2MB 上限限制 (413 Payload Too Large)。'
     }), 413
 
+@app.errorhandler(500)
+def internal_server_error(error):
+    """處理伺服器 500 內部錯誤，API 路由一律回傳 JSON 格式"""
+    if request.path.startswith('/api/'):
+        return jsonify({
+            'success': False,
+            'message': '伺服器內部發生異常，請稍候重試。'
+        }), 500
+    return "伺服器內部異常", 500
+
+@app.errorhandler(404)
+def not_found_error(error):
+    """處理 404 錯誤，API 路由一律回傳 JSON 格式"""
+    if request.path.startswith('/api/'):
+        return jsonify({
+            'success': False,
+            'message': '找不到該 API 端點 (404 Not Found)'
+        }), 404
+    return error
+
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -313,7 +333,7 @@ def create_site():
             'url': lan_url,
             'lan_url': lan_url,
             'local_url': local_url,
-            'current_access_url': current_access_url,
+            'current_access_url': public_access_url,
             'path': f"/site/{slug}",
             'file_path': f"published_sites/{file_name}"
         }
