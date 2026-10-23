@@ -335,8 +335,14 @@
     <!-- Toast 訊息提示元件 -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <!-- 純前端極簡 QR Code 生成庫 (無任何外部依賴，純 SVG 向量繪製) -->
-    <script src="/static/js/qrcode-generator.js"></script>
+    <!-- 權威標準 QR Code 生成庫 (官方經典版，高識別率、支援離線與手機鏡頭秒讀) -->
+    <script src="/static/js/qrcode.min.js"></script>
+    <script>
+        // 若本地資源載入異常，自動啟用 CDN 備援
+        if (typeof QRCode === 'undefined') {
+            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>');
+        }
+    </script>
     <script src="/static/js/app.js"></script>
 </body>
 

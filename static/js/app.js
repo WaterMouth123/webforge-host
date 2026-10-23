@@ -444,9 +444,9 @@ async function publishSite() {
         if (modalLocalUrl) modalLocalUrl.value = localAccessUrl;
         if (modalOpenBtn) modalOpenBtn.href = fullAccessUrl;
 
-        // 若有離線二維碼繪製庫，動態生成 SVG 二維碼
-        if (qrContainer && window.WebForgeQR) {
-            qrContainer.innerHTML = window.WebForgeQR.renderSvg(fullAccessUrl, 4, 1);
+        // 動態生成高精確度標準二維碼（任何手機鏡頭秒讀）
+        if (qrContainer) {
+            renderQrCode(qrContainer, fullAccessUrl, 120);
         }
 
         // 彈出成功分享對話框
@@ -942,6 +942,52 @@ async function deleteSite(siteId, siteTitle) {
 /**
  * 開啟獨立 QR Code 彈窗
  */
+/**
+ * 繪製高辨識率標準二維碼（任何手機鏡頭秒讀）
+ * @param {HTMLElement} container - 存放二維碼的 DOM 容器
+ * @param {string} url - 欲編碼的完整網址
+ * @param {number} size - 圖片像素尺寸
+ */
+function renderQrCode(container, url, size = 120) {
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!url) {
+        container.innerHTML = '<div style="color:#64748b;font-size:0.75rem;">無有效網址</div>';
+        return;
+    }
+
+    // 1. 首選：使用權威標準 QRCode.js (生成 Canvas / Img，糾錯等級 M，任何相機秒辨識)
+    if (typeof QRCode !== 'undefined') {
+        try {
+            new QRCode(container, {
+                text: url,
+                width: size,
+                height: size,
+                colorDark: '#000000',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+            return;
+        } catch (err) {
+            console.warn('QRCode.js 繪製失敗，切換至備援方案:', err);
+        }
+    }
+
+    // 2. 備援方案：純前端高相容性 QR 圖片渲染
+    const img = document.createElement('img');
+    img.src = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=1&data=${encodeURIComponent(url)}`;
+    img.alt = 'QR Code';
+    img.width = size;
+    img.height = size;
+    img.style.display = 'block';
+    img.style.borderRadius = '4px';
+    container.appendChild(img);
+}
+
+/**
+ * 開啟獨立 QR Code 彈窗
+ */
 function openQrModal(url, title) {
     const modal = document.getElementById('qrOnlyModal');
     const titleEl = document.getElementById('qrModalTitle');
@@ -951,8 +997,8 @@ function openQrModal(url, title) {
     if (titleEl) titleEl.textContent = title || '手機掃描二維碼';
     if (urlInput) urlInput.value = url;
 
-    if (container && window.WebForgeQR) {
-        container.innerHTML = window.WebForgeQR.renderSvg(url, 4, 1);
+    if (container) {
+        renderQrCode(container, url, 172);
     }
 
     if (modal) modal.classList.add('show');
@@ -995,6 +1041,7 @@ window.filterSitesList = filterSitesList;
 window.deleteSite = deleteSite;
 window.openQrModal = openQrModal;
 window.closeQrModal = closeQrModal;
+window.renderQrCode = renderQrCode;
 
 /* ==========================================================================
    五、 頁面生命週期初始化

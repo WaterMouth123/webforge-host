@@ -968,22 +968,32 @@ input[type="text"]:focus {
 }
 
 .qr-canvas-wrap {
-    width: 130px;
-    height: 130px;
+    width: 140px;
+    height: 140px;
     background: #ffffff;
-    padding: 6px;
+    padding: 10px;
     border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+}
+
+.qr-canvas-wrap canvas,
+.qr-canvas-wrap img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    margin: 0 auto;
 }
 
 .center-qr {
     margin: 0 auto;
-    width: 180px;
-    height: 180px;
+    width: 200px;
+    height: 200px;
+    padding: 14px;
 }
 
 .qr-instructions h4 {
