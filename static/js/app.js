@@ -410,9 +410,9 @@ async function publishSite() {
         const creatorId = getOrCreateCreatorId();
         const response = await fetch('/api/publish', {
             method: 'POST',
-            headers: {
+            headers: authHeaders({
                 'Content-Type': 'application/json'
-            },
+            }),
             body: JSON.stringify({
                 html: htmlContent,
                 title: title,
@@ -819,11 +819,21 @@ function handleFileUpload(event) {
  */
 function getLoggedInUser() {
     try {
+        // 必須同時具備後端簽發的登入憑證，舊版（未驗證）的登入資料一律視為未登入
+        if (!localStorage.getItem('webforge_token')) return null;
         const str = localStorage.getItem('webforge_user');
         return str ? JSON.parse(str) : null;
     } catch (e) {
         return null;
     }
+}
+
+/**
+ * 取得帶有後端登入憑證的請求標頭
+ */
+function authHeaders(extra = {}) {
+    const token = localStorage.getItem('webforge_token') || '';
+    return { ...extra, 'Authorization': 'Bearer ' + token };
 }
 
 /**
@@ -894,7 +904,7 @@ async function loadSitesList() {
             scope: currentSiteScope
         });
 
-        const res = await fetch(`/api/sites?${queryParams.toString()}`);
+        const res = await fetch(`/api/sites?${queryParams.toString()}`, { headers: authHeaders() });
         const contentType = res.headers.get('content-type') || '';
         if (!contentType.includes('application/json')) {
             throw new Error('伺服器未回傳有效 JSON');
@@ -1025,7 +1035,8 @@ async function deleteSite(siteId, siteTitle) {
 
     try {
         const res = await fetch(`/api/sites/${siteId}?creator_id=${encodeURIComponent(creatorId)}`, { 
-            method: 'DELETE' 
+            method: 'DELETE',
+            headers: authHeaders()
         });
         const data = await res.json();
         if (data.success) {
@@ -1219,7 +1230,7 @@ function renderGoogleGateButton() {
 /**
  * Google 登入成功回調函式
  */
-function handleGoogleCredentialResponse(response) {
+async function handleGoogleCredentialResponse(response) {
     if (!response || !response.credential) {
         showToast('Google 登入未完成', 'error');
         return;
@@ -1231,6 +1242,25 @@ function handleGoogleCredentialResponse(response) {
         return;
     }
 
+    // 交給後端向 Google 驗證憑證，通過後才取得本站登入憑證（token）
+    let token = '';
+    try {
+        const verifyRes = await fetch('/api/auth/google', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credential: response.credential })
+        });
+        const verifyData = await verifyRes.json();
+        if (!verifyData.success) {
+            showToast(verifyData.message || 'Google 登入驗證失敗', 'error');
+            return;
+        }
+        token = verifyData.token;
+    } catch (e) {
+        showToast('登入驗證請求失敗，請稍後再試', 'error');
+        return;
+    }
+
     const googleUser = {
         id: 'google_' + payload.sub,
         name: payload.name || payload.given_name || 'Google 使用者',
@@ -1239,6 +1269,7 @@ function handleGoogleCredentialResponse(response) {
         type: 'google'
     };
 
+    localStorage.setItem('webforge_token', token);
     localStorage.setItem('webforge_user', JSON.stringify(googleUser));
     updateUserAuthUI();
     closeGoogleConfigModal();
@@ -1356,41 +1387,13 @@ function saveGoogleClientId() {
 }
 
 /**
- * 快速切換自訂身分（讓使用者在尚未建立 Client ID 時也能立刻體驗獨立空間）
- */
-function simulateGoogleLogin() {
-    const input = document.getElementById('customUserEmailInput');
-    const email = (input?.value || '').trim();
-
-    if (!email || !email.includes('@')) {
-        showToast('請輸入有效的電子郵件格式！', 'error');
-        return;
-    }
-
-    const name = email.split('@')[0];
-    const user = {
-        id: 'google_sim_' + btoa(email.toLowerCase()).replace(/=/g, ''),
-        name: name.charAt(0).toUpperCase() + name.slice(1),
-        email: email.toLowerCase(),
-        picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`,
-        type: 'google'
-    };
-
-    localStorage.setItem('webforge_user', JSON.stringify(user));
-    updateUserAuthUI();
-    closeGoogleConfigModal();
-    showToast(`🎉 已成功切換至帳號「${user.email}」專屬空間！`, 'success');
-    loadSitesList();
-}
-
-/**
  * 登出 Google 帳戶（重新鎖定並返回登入門檻）
  */
 function logoutGoogleUser() {
     if (confirm('確定要登出目前帳號嗎？登出後將返回 Google 帳號登入畫面。')) {
         localStorage.removeItem('webforge_user');
-        closeUserMenu();
-        updateUserAuthUI();
+        localStorage.removeItem('webforge_token');
+        closeUserMenu();        updateUserAuthUI();
         showToast('已安全登出 Google 帳戶，請登入後繼續使用', 'info');
     }
 }
@@ -1412,6 +1415,11 @@ function closeUserMenu() {
 }
 
 function openGoogleConfigModal() {
+    // 安全：設定視窗含 Client ID 與「快速切換」，只允許管理員以 #setup 網址進入，一般訪客一律不顯示
+    if (location.hash !== '#setup') {
+        showToast('Google 登入暫時無法使用，請重新整理頁面或稍後再試', 'error');
+        return;
+    }
     const modal = document.getElementById('googleConfigModal');
     const input = document.getElementById('googleClientIdInput');
     if (input && googleAuthClientId) {
@@ -1447,7 +1455,6 @@ window.triggerGoogleLogin = triggerGoogleLogin;
 window.openGoogleConfigModal = openGoogleConfigModal;
 window.closeGoogleConfigModal = closeGoogleConfigModal;
 window.saveGoogleClientId = saveGoogleClientId;
-window.simulateGoogleLogin = simulateGoogleLogin;
 window.toggleUserMenu = toggleUserMenu;
 window.closeUserMenu = closeUserMenu;
 window.logoutGoogleUser = logoutGoogleUser;

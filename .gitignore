@@ -23,3 +23,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+
+# login signing key
+.secret_key

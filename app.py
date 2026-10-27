@@ -16,6 +16,10 @@ from datetime import datetime
 from collections import defaultdict
 from flask import Flask, request, jsonify, render_template, send_file, Response, abort, send_from_directory
 import io
+import json
+import urllib.parse
+import urllib.request
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 # 確保在 Windows 繁體中文終端機 (cp950) 下輸出 emoji 與中文不拋出 UnicodeEncodeError
 if sys.platform == 'win32':
@@ -215,10 +219,62 @@ def auth_config():
         'enabled': bool(client_id)
     })
 
+def _load_secret_key():
+    """簽發登入憑證用的密鑰：優先讀環境變數 SECRET_KEY，否則產生並存於本機檔案"""
+    key = os.environ.get('SECRET_KEY', '').strip()
+    if key:
+        return key
+    key_path = os.path.join(os.path.dirname(__file__), '.secret_key')
+    if os.path.exists(key_path):
+        with open(key_path, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    key = uuid.uuid4().hex + uuid.uuid4().hex
+    with open(key_path, 'w', encoding='utf-8') as f:
+        f.write(key)
+    return key
+
+_token_serializer = URLSafeTimedSerializer(_load_secret_key(), salt='webforge-session')
+SESSION_MAX_AGE = 30 * 24 * 3600  # 登入憑證有效 30 天
+
+def get_authenticated_creator_id():
+    """從 Authorization: Bearer 憑證取得「已驗證」的使用者 ID；無效則回傳 None（不再信任前端傳來的 creator_id）"""
+    auth = request.headers.get('Authorization', '')
+    if not auth.startswith('Bearer '):
+        return None
+    try:
+        payload = _token_serializer.loads(auth[7:].strip(), max_age=SESSION_MAX_AGE)
+        return payload.get('uid') or None
+    except (BadSignature, SignatureExpired):
+        return None
+
+@app.route('/api/auth/google', methods=['POST'])
+def auth_google():
+    """驗證 Google ID Token（向 Google 查證 + 比對 Client ID），通過後簽發本站登入憑證"""
+    client_id = os.environ.get('GOOGLE_CLIENT_ID', '').strip()
+    credential = ((request.get_json(silent=True) or {}).get('credential') or '').strip()
+    if not client_id or not credential:
+        return jsonify({'success': False, 'message': '登入設定不完整'}), 400
+    try:
+        url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' + urllib.parse.quote(credential)
+        with urllib.request.urlopen(url, timeout=8) as resp:
+            info = json.loads(resp.read().decode('utf-8'))
+    except Exception:
+        return jsonify({'success': False, 'message': 'Google 憑證驗證失敗'}), 401
+    # 憑證必須是發給本站的，且帳號 ID 存在
+    if info.get('aud') != client_id or not info.get('sub'):
+        return jsonify({'success': False, 'message': 'Google 憑證無效'}), 401
+    if info.get('iss') not in ('accounts.google.com', 'https://accounts.google.com'):
+        return jsonify({'success': False, 'message': 'Google 憑證來源無效'}), 401
+    uid = 'google_' + info['sub']
+    token = _token_serializer.dumps({'uid': uid})
+    return jsonify({'success': True, 'token': token, 'uid': uid})
+
 @app.route('/api/sites', methods=['GET'])
 def list_sites():
-    """取得已發布網站清單（支援 creator_id 專屬隔離）"""
-    creator_id = (request.args.get('creator_id') or '').strip()
+    """取得已發布網站清單（需 Google 登入；以已驗證身分做專屬隔離）"""
+    creator_id = get_authenticated_creator_id()
+    if not creator_id:
+        return jsonify({'success': False, 'message': '請先使用 Google 帳戶登入'}), 401
     scope = (request.args.get('scope') or 'mine').strip()
 
     conn = get_db()
@@ -259,7 +315,7 @@ def create_site():
     html_content = (data.get('html') or data.get('html_content') or '').strip()
     title = (data.get('title') or '').strip() or '未命名網站'
     description = (data.get('description') or '').strip()
-    creator_id = (data.get('creator_id') or '').strip()
+    creator_id = get_authenticated_creator_id() or ''
 
     if not creator_id:
         return jsonify({'success': False, 'message': '本系統需要使用 Google 帳戶登入後方可發布網站！'}), 401
@@ -390,7 +446,10 @@ def get_site_detail(site_id):
 
 @app.route('/api/sites/<site_id>', methods=['PUT'])
 def update_site(site_id):
-    """更新網站內容"""
+    """更新網站內容（只有站點擁有者可更新）"""
+    req_creator_id = get_authenticated_creator_id()
+    if not req_creator_id:
+        return jsonify({'success': False, 'message': '請先使用 Google 帳戶登入'}), 401
     data = request.get_json(force=True, silent=True) or {}
     html_content = data.get('html_content', '').strip()
     title = data.get('title', '').strip()
@@ -401,10 +460,14 @@ def update_site(site_id):
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT id FROM sites WHERE id = ? AND is_active = 1', (site_id,))
-    if not cursor.fetchone():
+    cursor.execute('SELECT id, creator_id FROM sites WHERE id = ? AND is_active = 1', (site_id,))
+    row = cursor.fetchone()
+    if not row:
         conn.close()
         return jsonify({'success': False, 'message': '找不到該站點'}), 404
+    if (row['creator_id'] or '').strip() != req_creator_id:
+        conn.close()
+        return jsonify({'success': False, 'message': '權限不足！您只能修改由您自己發布的網站。'}), 403
 
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     cursor.execute('''
@@ -423,7 +486,9 @@ def update_site(site_id):
 @app.route('/api/sites/<site_id>', methods=['DELETE'])
 def delete_site(site_id):
     """刪除網站（軟刪除，支援 creator_id 專屬驗證）"""
-    req_creator_id = (request.args.get('creator_id') or (request.get_json(silent=True) or {}).get('creator_id') or '').strip()
+    req_creator_id = get_authenticated_creator_id()
+    if not req_creator_id:
+        return jsonify({'success': False, 'message': '請先使用 Google 帳戶登入'}), 401
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('SELECT creator_id FROM sites WHERE (id = ? OR slug = ?) AND is_active = 1', (site_id, site_id))
@@ -434,7 +499,7 @@ def delete_site(site_id):
 
     owner_creator_id = (row['creator_id'] or '').strip()
     # 若該站點有綁定建立者，且呼叫者身分不符，禁止刪除
-    if owner_creator_id and req_creator_id and owner_creator_id != req_creator_id:
+    if owner_creator_id and owner_creator_id != req_creator_id:
         conn.close()
         return jsonify({'success': False, 'message': '權限不足！您只能刪除由您自己發布的網站。'}), 403
 
